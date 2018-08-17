@@ -2,12 +2,12 @@ package com.github.vassilibykov.hmk
 
 class Environment(private val bindings: Map<String, TypeScheme>) {
 
-    val freeVariables: Set<String> get() {
+    val freeVariables: Set<String> by lazy {
         val union = mutableSetOf<String>()
         for (value in bindings.values) {
             union.addAll(value.freeVariables)
         }
-        return union
+        union
     }
 
     fun without(name: String): Environment {

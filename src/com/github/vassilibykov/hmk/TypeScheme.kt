@@ -6,7 +6,7 @@ class TypeScheme(
 ) {
     constructor(type: Monotype) : this(setOf(), type)
 
-    val freeVariables = type.freeVariables.subtract(variables)
+    val freeVariables: Set<String> by lazy { type.freeVariables.subtract(variables) }
 
     fun apply(subst: Substitution): TypeScheme {
         val filtered = subst.without(variables)

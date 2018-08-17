@@ -5,20 +5,17 @@ sealed class Monotype {
 
     open fun apply(subst: Substitution): Monotype = this
 
-    open fun mostGeneralUnifier(other: Monotype): Substitution {
-        if (other is TVariable) {
-            return bindVariable(other.name, this)
-        } else {
-            throw InferenceError("types $this and $other do not unify")
-        }
-    }
+    open fun mostGeneralUnifier(other: Monotype): Substitution =
+            if (other is TVariable) {
+                substitutionWith(other.name, this)
+            } else {
+                throw InferenceError("types $this and $other do not unify")
+            }
 
-    fun bindVariable(name: String, type: Monotype): Substitution {
-        return when {
-            type is TVariable -> Substitution.empty
-            name in type.freeVariables -> throw InferenceError("free variable check fails for $name in $type")
-            else -> Substitution(mapOf(name to type))
-        }
+    fun substitutionWith(name: String, type: Monotype): Substitution = when {
+        type is TVariable -> Substitution.empty
+        name in type.freeVariables -> throw InferenceError("free variable check fails for $name in $type")
+        else -> Substitution(mapOf(name to type))
     }
 }
 
@@ -46,7 +43,7 @@ data class TVariable(val name: String) : Monotype() {
 
     override fun apply(subst: Substitution): Monotype = subst.lookup(name) ?: this
 
-    override fun mostGeneralUnifier(other: Monotype): Substitution = bindVariable(name, other)
+    override fun mostGeneralUnifier(other: Monotype): Substitution = substitutionWith(name, other)
 
     override fun toString(): String = name
 }

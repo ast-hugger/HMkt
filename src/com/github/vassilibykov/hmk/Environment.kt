@@ -28,7 +28,7 @@ class Environment(private val bindings: Map<String, TypeScheme>) {
 
     fun generalize(type: Monotype) = TypeScheme(type.freeVariables subtract freeVariables, type)
 
-    fun inferTypeW(expr: Expression): Pair<Substitution, Monotype> = when(expr) {
+    fun inferTypeW(expr: Expression): Pair<Substitution, Monotype> = when (expr) {
         is IntLiteral -> Substitution.empty to TInt
         is BoolLiteral -> Substitution.empty to TBool
         is Variable -> bindings[expr.name]
@@ -53,6 +53,31 @@ class Environment(private val bindings: Map<String, TypeScheme>) {
             val env = this.without(expr.variable).with(expr.variable, genScheme)
             val (bodySubst, bodyType) = env.apply(initSubst).inferTypeW(expr.body)
             (bodySubst union initSubst) to bodyType
+        }
+    }
+
+    fun inferTypeJ(expr: Expression, unifier: TypeUnifier): Monotype = when (expr) {
+        is IntLiteral -> TInt
+        is BoolLiteral -> TBool
+        is Variable -> bindings[expr.name]?.instantiate() ?: throw InferenceError("Unbound variable ${expr.name}")
+        is Application -> {
+            val fType = inferTypeJ(expr.function, unifier)
+            val aType = inferTypeJ(expr.argument, unifier)
+            val a = TVariable.generate()
+            unifier.unify(fType, TFunction(aType, a))
+            unifier.find(a)
+        }
+        is Abstraction -> {
+            val a = TVariable.generate()
+            val rType = this.with(expr.variable, TypeScheme(a)).inferTypeJ(expr.body, unifier)
+            // TODO do we need to look up the representative of these?
+            TFunction(a, rType)
+        }
+        is Let -> {
+            val initType = inferTypeJ(expr.initializer, unifier)
+            val genScheme = this.generalize(initType)
+            val env = this.with(expr.variable, genScheme)
+            env.inferTypeJ(expr.body, unifier)
         }
     }
 }

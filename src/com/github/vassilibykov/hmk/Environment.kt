@@ -1,5 +1,12 @@
 package com.github.vassilibykov.hmk
 
+/**
+ * A mapping of (program, not type) variable names to their types. Classically,
+ * the range of the mapping are types in the general sense: both monotypes and
+ * type schemes. To simplify the typing, in this implementation the target is
+ * always a type scheme, with monotypes represented as type schemes with no
+ * quantified variables.
+ */
 class Environment(private val bindings: Map<String, TypeScheme>) {
 
     val freeVariables: Set<String> by lazy {
@@ -22,37 +29,39 @@ class Environment(private val bindings: Map<String, TypeScheme>) {
         return Environment(copy)
     }
 
+    fun with(name: String, type: Monotype) = with(name, TypeScheme(type))
+
     fun apply(subst: Substitution) = Environment(bindings.mapValues { it.value.apply(subst) })
 
     infix fun union(other: Environment) = Environment(mergedMaps(bindings, other.bindings))
 
     fun generalize(type: Monotype) = TypeScheme(type.freeVariables subtract freeVariables, type)
 
-    fun inferTypeW(expr: Expression): Pair<Substitution, Monotype> = when (expr) {
-        is IntLiteral -> Substitution.empty to TInt
-        is BoolLiteral -> Substitution.empty to TBool
+    fun inferTypeW(expr: Expression): Pair<Monotype, Substitution> = when (expr) {
+        is IntLiteral -> TInt and Substitution.empty
+        is BoolLiteral -> TBool and Substitution.empty
         is Variable -> bindings[expr.name]
-                ?.let { Substitution.empty to it.instantiate() }
+                ?.let { it.instantiate() and Substitution.empty }
                 ?: throw InferenceError("Unbound variable ${expr.name}")
         is Application -> {
             val a = TVariable.generate()
-            val (s1, t1) = inferTypeW(expr.function)
-            val (s2, t2) = apply(s1).inferTypeW(expr.argument)
-            val mgu = t1.apply(s2).mostGeneralUnifier(TFunction(t2, a))
-            (mgu union s2 union s1) to a.apply(mgu)
+            val (funType, funSubst) = inferTypeW(expr.function)
+            val (argType, argSubst) = apply(funSubst).inferTypeW(expr.argument)
+            val mgu = funType.apply(argSubst).mostGeneralUnifier(TFunction(argType, a))
+            a.apply(mgu) and (mgu union argSubst union funSubst)
         }
         is Abstraction -> {
             val a = TVariable.generate()
-            val env = without(expr.variable) union Environment(mapOf(expr.variable to TypeScheme(a)))
-            val (bodySubst, bodyType) = env.inferTypeW(expr.body)
-            bodySubst to TFunction(a.apply(bodySubst), bodyType)
+            val env = this.without(expr.variable) union Environment(mapOf(expr.variable to TypeScheme(a)))
+            val (bodyType, bodySubst) = env.inferTypeW(expr.body)
+            TFunction(a.apply(bodySubst), bodyType) and bodySubst
         }
         is Let -> {
-            val (initSubst, initType) = inferTypeW(expr.initializer)
+            val (initType, initSubst) = inferTypeW(expr.initializer)
             val genScheme = this.apply(initSubst).generalize(initType)
-            val env = this.without(expr.variable).with(expr.variable, genScheme)
-            val (bodySubst, bodyType) = env.apply(initSubst).inferTypeW(expr.body)
-            (bodySubst union initSubst) to bodyType
+            val env = this.with(expr.variable, genScheme)
+            val (bodyType, bodySubst) = env.apply(initSubst).inferTypeW(expr.body)
+            bodyType and (bodySubst union initSubst)
         }
     }
 
@@ -69,9 +78,8 @@ class Environment(private val bindings: Map<String, TypeScheme>) {
         }
         is Abstraction -> {
             val a = TVariable.generate()
-            val rType = this.with(expr.variable, TypeScheme(a)).inferTypeJ(expr.body, unifier)
-            // TODO do we need to look up the representative of these?
-            TFunction(a, rType)
+            val rType = this.with(expr.variable, a).inferTypeJ(expr.body, unifier)
+            TFunction(unifier.find(a), unifier.find(rType)) // I think we need to look up the rep like this for both values
         }
         is Let -> {
             val initType = inferTypeJ(expr.initializer, unifier)
@@ -81,5 +89,10 @@ class Environment(private val bindings: Map<String, TypeScheme>) {
         }
     }
 }
+
+/**
+ * Same as [Pair.to], but more readable in this context.
+ */
+private infix fun<T, U> T.and(that: U): Pair<T, U> = Pair(this, that)
 
 class InferenceError(message: String) : RuntimeException(message)

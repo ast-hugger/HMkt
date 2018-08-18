@@ -2,9 +2,10 @@ package com.github.vassilibykov.hmk
 
 /**
  * Essentially an implementation of a disjoint set, but geared specifically
- * towards unifying types as required by Hindley-Milner Algorithm J. Most
- * importantly, a type variable and a term are unified such that the term
- * becomes the representative.
+ * towards unifying types as required by the Algorithm J. Most importantly,
+ * unification is not optimized to minimize the length of child-parent
+ * chains as in a generic disjoint set. Instead, when unifying a type
+ * variable and a term the term must become the representative.
  */
 class TypeUnifier {
 

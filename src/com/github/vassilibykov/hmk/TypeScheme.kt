@@ -1,5 +1,11 @@
 package com.github.vassilibykov.hmk
 
+/**
+ * A monotype with some variables quantified as `forall`.
+ * It is possible for the set of quantified variables to be empty,
+ * in which case the scheme is actually a stand-in for its underlying
+ * monotype.
+ */
 class TypeScheme(
         private val variables: Set<String>,
         private val type: Monotype
